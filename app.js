@@ -756,7 +756,8 @@ const UI = {
     this.vlist.setItems(r.messages);
   },
 
-  buildMsgNode(m, r){
+
+    buildMsgNode(m, r){
     const d = document.createElement('div');
     d.dataset.id = m.id;
     d.className = 'msg ' + (m.self ? 'self' : 'other');
@@ -764,7 +765,6 @@ const UI = {
     const lock = m.encrypted ? '<span class="lock" title="E2EE">🔒</span>' : '<span class="lock" title="DTLS">🛡️</span>';
     const status = m.self && m.status ? `<span class="status">${m.status==='delivered'?'✓✓':m.status==='sent'?'✓':'⏳'}</span>` : '';
 
-    // FIX: mis mensajes muestran mi nickname, no "Tu nombre"
     let whoHtml;
     if (m.self){
       whoHtml = escapeHtml(m.nickname || t('your_name'));
@@ -791,9 +791,7 @@ const UI = {
       d.textContent = m.text;
     }
 
-    // FIX: acciones de borrado para TODOS los mensajes (propios y remotos)
-    // - local: siempre disponible
-    // - remoto: solo para mensajes propios (borrar en el resto de dispositivos)
+    // Acciones de borrado (ocultas hasta que el mensaje esté seleccionado)
     const actions = document.createElement('div');
     actions.className = 'msg-actions';
     let actionsHtml = `<button data-del-local="1" title="${t('delete_local')}">🗑</button>`;
@@ -807,7 +805,7 @@ const UI = {
     if (remoteBtn) remoteBtn.onclick = ev => { ev.stopPropagation(); r.deleteMessage(m.id, true); };
     d.appendChild(actions);
 
-    // FIX: click en el nombre del peer (mensajes remotos) → abrir menú del peer o guardar contacto
+    // Click en nombre remoto → menú de peer
     if (!m.self){
       const nameEl = d.querySelector('.peer-name');
       if (nameEl){
@@ -819,7 +817,6 @@ const UI = {
             const rect = nameEl.getBoundingClientRect();
             UI.showPeerMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, peerId);
           } else {
-            // Peer offline: guardar la sala como contacto directamente
             const nick = m.nickname || (peerId||'').slice(0,6);
             await db.put('contacts', { id: r.id, nickname: nick, fp: null, verified: false, at: Date.now() });
             state.contacts = await db.all('contacts');
@@ -832,8 +829,23 @@ const UI = {
         };
       }
     }
+
+    // Selección en dos pasos: primer click → selecciona, segundo click → deselecciona
+    if (m.type !== 'system'){
+      d.onclick = ev => {
+        if (ev.target.closest('.msg-actions')) return;
+        if (ev.target.closest('a') || ev.target.closest('button') || ev.target.closest('.peer-name')) return;
+        const wasSelected = d.classList.contains('selected');
+        document.querySelectorAll('.msg.selected').forEach(x => x.classList.remove('selected'));
+        if (!wasSelected) d.classList.add('selected');
+      };
+    }
+
     return d;
   },
+
+
+
 
   updateRoomStatus(r){
     const el = document.getElementById('statusBar');
@@ -1021,6 +1033,17 @@ function applyLang(){
   setLang(state.settings.lang);
   applyTranslations();
 }
+/*function applyTranslations(){
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    el.textContent = t(k);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.title = t('app_name');
+}*/
+
 function applyTranslations(){
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.dataset.i18n;
@@ -1030,6 +1053,19 @@ function applyTranslations(){
     el.placeholder = t(el.dataset.i18nPh);
   });
   document.title = t('app_name');
+  // Re-renderizar componentes dinámicos para reflejar el nuevo idioma
+  if (typeof UI !== 'undefined' && UI.renderTabs){
+    try {
+      UI.renderTabs();
+      UI.updateRoomStatus(UI.activeRoom());
+      UI.renderMessages();
+      UI.renderStats();
+      const pinStatus = document.getElementById('pinStatus');
+      if (pinStatus) {
+        pinStatus.textContent = state.settings.pinEnabled ? '✅ ' + t('pin_lock') : '—';
+      }
+    } catch(e){ /* UI aún no lista, se aplicará al inicializar */ }
+  }
 }
 
 /* ============ PIN ============ */
@@ -1084,7 +1120,7 @@ function armInactivityWatch(){
 }
 
 /* ============ FILE WARNING ============ */
-async function maybeShowFileWarning(){
+/*async function maybeShowFileWarning(){
   if (state.settings.fileWarnShown) return true;
   return new Promise(resolve => {
     const dlg = document.getElementById('fileWarnDialog');
@@ -1393,6 +1429,8 @@ async function init(){
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); composer.requestSubmit(); }
   };
 
+
+  /*
   document.getElementById('attach').onclick = async () => {
     const ok = await maybeShowFileWarning();
     if (!ok) return;
@@ -1403,15 +1441,45 @@ async function init(){
     for (const f of e.target.files) await r.sendFile(f);
     e.target.value = '';
   };
+  */
+
+    document.getElementById('attach').onclick = () => {
+    if (state.settings.fileWarnShown){
+      document.getElementById('filePicker').click();
+      return;
+    }
+    document.getElementById('fileWarnDialog').showModal();
+  };
+  document.getElementById('fileWarnOk').onclick = async () => {
+    if (document.getElementById('fileWarnDont').checked){
+      state.settings.fileWarnShown = true;
+      await db.put('settings', { key:'main', val: state.settings });
+    }
+    document.getElementById('fileWarnDialog').close();
+    // Importante: el click del botón ES el gesto de usuario → aquí SÍ se abre el picker
+    document.getElementById('filePicker').click();
+  };
+
+
   const area = document.getElementById('chatArea');
   const overlay = document.getElementById('dropOverlay');
   area.addEventListener('dragover', e => { e.preventDefault(); overlay.classList.add('on'); });
   area.addEventListener('dragleave', e => { if (e.target === area) overlay.classList.remove('on'); });
-  area.addEventListener('drop', async e => {
+  /*area.addEventListener('drop', async e => {
     e.preventDefault(); overlay.classList.remove('on');
     const r = UI.activeRoom(); if (!r) return;
     const ok = await maybeShowFileWarning();
     if (!ok) return;
+    for (const f of e.dataTransfer.files) await r.sendFile(f);
+  });*/
+
+    area.addEventListener('drop', async e => {
+    e.preventDefault(); overlay.classList.remove('on');
+    const r = UI.activeRoom(); if (!r) return;
+    if (!state.settings.fileWarnShown){
+      document.getElementById('fileWarnDialog').showModal();
+      return;
+    }
     for (const f of e.dataTransfer.files) await r.sendFile(f);
   });
 
@@ -1432,6 +1500,14 @@ async function init(){
     for (const r of state.rooms.values()){ try { r.trysteroRoom?.leave?.(); } catch{} }
   });
 
+    // Deseleccionar al tocar fuera de un mensaje
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.msg')) {
+      document.querySelectorAll('.msg.selected').forEach(x => x.classList.remove('selected'));
+    }
+  });
+
+    document.getElementById('sasCancel').onclick = () => document.getElementById('sasDialog').close();
   document.getElementById('lockUnlock').onclick = tryUnlock;
   document.getElementById('lockInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') tryUnlock();

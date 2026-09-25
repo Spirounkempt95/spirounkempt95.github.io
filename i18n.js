@@ -53,6 +53,11 @@ const dict = {
     confirm_clear_history:'¿Borrar todos los mensajes de esta sala localmente?',
     notification_title:'Nuevo mensaje', peer_left:'Un peer se ha desconectado',
     is_typing: '{name} está escribiendo…',
+    logs_all: 'Todo',
+    logs_conn: 'Con',
+    logs_ice: 'ICE',
+    logs_msg: 'Msj',
+    logs_clear: 'Limpiar',
   },
   en: {
     app_name:'P2P Chat', menu:'Panel', user:'User', contacts:'Contacts', logs:'Logs',
@@ -106,6 +111,11 @@ const dict = {
     confirm_clear_history:'Delete all messages of this room locally?',
     notification_title:'New message', peer_left:'A peer disconnected',
     is_typing: '{name} is typing…',
+    logs_all: 'All',
+    logs_conn: 'Conn',
+    logs_ice: 'ICE',
+    logs_msg: 'Msg',
+    logs_clear: 'Clear',
   },
   de: {
     app_name:'P2P Chat', menu:'Panel', user:'Benutzer', contacts:'Kontakte', logs:'Logs',
@@ -159,6 +169,11 @@ const dict = {
     confirm_clear_history:'Alle Nachrichten dieses Raums lokal löschen?',
     notification_title:'Neue Nachricht', peer_left:'Ein Peer hat sich getrennt',
     is_typing: '{name} schreibt…',
+    logs_all: 'Alle',
+    logs_conn: 'Conn',
+    logs_ice: 'ICE',
+    logs_msg: 'Msg',
+    logs_clear: 'Leeren',
   },
   zh: {
     app_name:'P2P 聊天', menu:'面板', user:'用户', contacts:'联系人', logs:'日志',
@@ -212,6 +227,11 @@ const dict = {
     confirm_clear_history:'在本地删除此房间的所有消息？',
     notification_title:'新消息', peer_left:'一个对等已断开',
     is_typing: '{name} 正在输入…',
+    logs_all: '全部',
+    logs_conn: '连接',
+    logs_ice: 'ICE',
+    logs_msg: '消息',
+    logs_clear: '清除',
   },
   ru: {
     app_name:'P2P Чат', menu:'Панель', user:'Пользователь', contacts:'Контакты', logs:'Логи',
@@ -265,6 +285,11 @@ const dict = {
     confirm_clear_history:'Удалить все сообщения этой комнаты локально?',
     notification_title:'Новое сообщение', peer_left:'Пир отключился',
     is_typing: '{name} печатает…',
+    logs_all: 'Все',
+    logs_conn: 'Соед',
+    logs_ice: 'ICE',
+    logs_msg: 'Сообщ',
+    logs_clear: 'Очистить',
   }
 };
 
