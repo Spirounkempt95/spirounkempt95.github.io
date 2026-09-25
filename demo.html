@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat P2P · sin backend</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --border:#262a35; --text:#e6e8ee;
+    --muted:#8b91a1; --accent:#6ea8fe; --ok:#4ade80;
+    --self:#2a3b5c; --other:#232733;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  #app{max-width:720px;margin:0 auto;height:100dvh;display:flex;flex-direction:column}
+  header{padding:16px 20px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  #status{font-size:12px;color:var(--muted);padding:4px 10px;
+    border:1px solid var(--border);border-radius:999px;white-space:nowrap}
+  #status.online{color:var(--ok);border-color:rgba(74,222,128,.35)}
+  #setup{padding:24px 20px;display:flex;flex-direction:column;gap:14px}
+  #setup label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+  #setup input{background:var(--panel);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:8px;font-size:14px;font-family:inherit}
+  #setup input:focus{outline:none;border-color:var(--accent)}
+  button{background:var(--accent);color:#0b1220;border:none;padding:10px 14px;
+    border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;font-family:inherit}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #chat{flex:1;display:flex;flex-direction:column;min-height:0}
+  #messages{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:8px}
+  .msg{max-width:78%;padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.4;
+    word-wrap:break-word;overflow-wrap:anywhere}
+  .msg .meta{display:block;font-size:10.5px;color:var(--muted);margin-bottom:3px;
+    font-variant-numeric:tabular-nums}
+  .msg.self{align-self:flex-end;background:var(--self);border-bottom-right-radius:4px}
+  .msg.other{align-self:flex-start;background:var(--other);border-bottom-left-radius:4px}
+  .msg.system{align-self:center;background:transparent;color:var(--muted);font-size:12px;
+    padding:2px 8px;max-width:100%;text-align:center}
+  #form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--panel)}
+  #input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:10px 14px;border-radius:8px;font-size:14px;font-family:inherit}
+  #input:focus{outline:none;border-color:var(--accent)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🔒 Chat P2P sin backend</h1>
+    <div id="status">Desconectado</div>
+  </header>
+
+  <section id="setup">
+    <label>Nombre de la sala
+      <input id="room" autocomplete="off" placeholder="p.ej. mi-sala-secreta">
+    </label>
+    <label>Contraseña (opcional · activa E2EE)
+      <input id="password" type="password" autocomplete="off"
+             placeholder="déjalo vacío para no cifrar mensajes">
+    </label>
+    <button id="connect">Conectar</button>
+    <p class="hint">
+      Comparte la sala (y la contraseña por un canal seguro) con la otra persona.
+      Abre esta misma página en otro navegador o dispositivo, usa los mismos datos
+      y hablad directamente — sin servidores intermedios.
+    </p>
+  </section>
+
+  <section id="chat" hidden>
+    <div id="messages"></div>
+    <form id="form">
+      <input id="input" placeholder="Escribe un mensaje…" autocomplete="off">
+      <button type="submit">Enviar</button>
+    </form>
+  </section>
+</div>
+
+<script type="module">
+import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.6/torrent'
+
+const els = {
+  setup: document.getElementById('setup'),
+  chat: document.getElementById('chat'),
+  room: document.getElementById('room'),
+  password: document.getElementById('password'),
+  connect: document.getElementById('connect'),
+  status: document.getElementById('status'),
+  messages: document.getElementById('messages'),
+  form: document.getElementById('form'),
+  input: document.getElementById('input'),
+}
+
+/* ---------- Cifrado E2EE opcional (AES-GCM + PBKDF2) ---------- */
+let cryptoKey = null
+
+async function deriveKey(password, roomName) {
+  const enc = new TextEncoder()
+  const km = await crypto.subtle.importKey('raw', enc.encode(password),
+    'PBKDF2', false, ['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: enc.encode('p2p-chat-v1:' + roomName),
+      iterations: 200000, hash: 'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt'])
+}
+
+const bufToB64 = buf => {
+  const b = new Uint8Array(buf); let s = ''
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
+  return btoa(s)
+}
+const b64ToBuf = b64 => {
+  const bin = atob(b64), out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+async function encryptText(text) {
+  if (!cryptoKey) return { iv: null, data: text }
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv }, cryptoKey, new TextEncoder().encode(text))
+  return { iv: Array.from(iv), data: bufToB64(ct) }
+}
+
+async function decryptPayload(p) {
+  if (!p.iv) return p.data
+  const pt = await crypto.subtle.decrypt(
+    { name:'AES-GCM', iv: new Uint8Array(p.iv) }, cryptoKey, b64ToBuf(p.data))
+  return new TextDecoder().decode(pt)
+}
+
+/* ---------- UI ---------- */
+function addMessage(peerId, text, isSelf=false) {
+  const d = document.createElement('div')
+  d.className = 'msg ' + (isSelf ? 'self' : 'other')
+  const m = document.createElement('span')
+  m.className = 'meta'
+  m.textContent = (isSelf ? 'tú' : peerId.slice(0,6)) + ' · ' +
+    new Date().toLocaleTimeString()
+  d.appendChild(m); d.appendChild(document.createTextNode(text))
+  els.messages.appendChild(d)
+  els.messages.scrollTop = els.messages.scrollHeight
+}
+function addSystem(text) {
+  const d = document.createElement('div')
+  d.className = 'msg system'; d.textContent = text
+  els.messages.appendChild(d)
+  els.messages.scrollTop = els.messages.scrollHeight
+}
+
+/* ---------- Conexión ---------- */
+let room = null, sendMsg = null, connectedRoom = null
+const peers = new Set()
+
+function updateStatus() {
+  if (!connectedRoom) return
+  if (peers.size === 0) {
+    els.status.textContent = `Sala: ${connectedRoom} · solo`
+    els.status.classList.remove('online')
+  } else {
+    els.status.textContent =
+      `Sala: ${connectedRoom} · ${peers.size} peer${peers.size===1?'':'s'}`
+    els.status.classList.add('online')
+  }
+}
+
+async function connect() {
+  const roomName = els.room.value.trim()
+  const password = els.password.value
+  if (!roomName) return alert('Introduce un nombre de sala')
+
+  els.connect.disabled = true
+  els.connect.textContent = 'Conectando…'
+
+  if (password) cryptoKey = await deriveKey(password, roomName)
+
+  // joinRoom recibe (config, roomId). El password cifra el signaling (SDP).
+  room = joinRoom(
+    { appId: 'p2p-chat-demo-v1', password: password || undefined },
+    roomName
+  )
+
+  const [send, get] = room.makeAction('msg')
+  sendMsg = send
+
+  get(async (payload, peerId) => {
+    try {
+      const text = await decryptPayload(payload)
+      addMessage(peerId, text, false)
+    } catch {
+      addSystem('⚠️ Mensaje recibido que no se pudo descifrar (¿contraseña distinta?)')
+    }
+  })
+
+  room.onPeerJoin(id => {
+    peers.add(id); updateStatus()
+    addSystem(`🟢 ${id.slice(0,6)} conectado`)
+  })
+  room.onPeerLeave(id => {
+    peers.delete(id); updateStatus()
+    addSystem(`🔴 ${id.slice(0,6)} desconectado`)
+  })
+
+  connectedRoom = roomName
+  els.setup.hidden = true
+  els.chat.hidden = false
+  els.input.focus()
+  updateStatus()
+  addSystem(password ? '🔐 E2EE activo (contraseña)' : '🔓 Sin E2EE (solo DTLS)')
+  addSystem('Esperando a otros peers…')
+}
+
+els.connect.addEventListener('click', connect)
+els.password.addEventListener('keydown', e => { if (e.key === 'Enter') connect() })
+
+els.form.addEventListener('submit', async e => {
+  e.preventDefault()
+  const text = els.input.value.trim()
+  if (!text || !sendMsg) return
+  els.input.value = ''
+  addMessage(selfId, text, true)
+  sendMsg(await encryptText(text))
+})
+
+// Precarga de sala desde ?room=... o #...
+const qp = new URLSearchParams(location.search)
+const urlRoom = qp.get('room') || location.hash.slice(1)
+els.room.value = urlRoom || 'sala-' + Math.random().toString(36).slice(2,8)
+</script>
+</body>
+</html>
