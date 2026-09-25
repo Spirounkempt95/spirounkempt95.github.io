@@ -89,22 +89,8 @@ Una vez conectado, haz clic en el contacto en la barra de estado → **Ver SAS**
 
 ## Cómo funciona
 
-```
-┌────────────────┐                          ┌────────────────┐
-│  Navegador A      │                          │  Navegador B      │
-│                   │                          │                   │
-│  ┌──────────┐   │                          │  ┌──────────┐   │
-│  │ P2P Chat │   │◄────────────────────────►│ │ P2P Chat │   │
-│  └──────────┘   │        WebRTC (DTLS)     │  └──────────┘   │
-│     ▲     ▲      │                          │     ▲     ▲     │
-│     │      │      │                          │     │     │      │
-│    UI   Crypto    │                          │    UI   Crypto    │
-│         Worker    │                          │         Worker    │
-└────┬───────────┘                          └───────────┬────┘
-      │                                                      │
-      └────────────► Señalización ◄────────────────────┘
-                 (trackers BitTorrent / Nostr / MQTT)
-```
+<img width="1738" height="905" src="https://github.com/user-attachments/assets/e9163c70-6e84-4e84-bebb-c89521b539bc" />
+
 
 1. **Señalización**: los dos navegadores se encuentran a través de una red pública y descentralizada — trackers de BitTorrent por defecto, con Nostr y MQTT como alternativas. Si se ha establecido una contraseña, los mensajes SDP (que contienen las huellas DTLS) se cifran antes de enviarse, de modo que un nodo de señalización malicioso no puede realizar un MITM.
 2. **Conexión**: WebRTC negocia una conexión directa de igual a igual. Si la red bloquea una ruta directa (por ejemplo, ambos pares detrás de CGNAT), el tráfico se retransmite mediante un servidor TURN — sigue cifrado de extremo a extremo, pero con más latencia.
