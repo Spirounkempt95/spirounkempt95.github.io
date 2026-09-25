@@ -93,6 +93,30 @@ const els = {
   input: document.getElementById('input'),
 }
 
+/* ---------- NUEVO: Servidores TURN públicos (sin registro) ---------- */
+const PUBLIC_TURN_SERVERS = [
+  {
+    urls: [
+      'turn:turn.evan-brass.net',
+      'turn:turn.evan-brass.net?transport=tcp',
+      'turns:turn.evan-brass.net:443?transport=tcp'
+    ],
+    username: 'user',
+    credential: 'password'
+  },
+  {
+    urls: ['turn:openrelay.metered.ca:80'],
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: ['turn:relay1.expressturn.com:3478'],
+    username: 'ef0f8b5c7a2d3e4f',
+    credential: 'a1b2c3d4e5f6'
+  }
+]
+/* ------------------------------------------------------------------ */
+
 /* ---------- Cifrado E2EE opcional (AES-GCM + PBKDF2) ---------- */
 let cryptoKey = null
 
@@ -177,9 +201,13 @@ async function connect() {
 
   if (password) cryptoKey = await deriveKey(password, roomName)
 
-  // joinRoom recibe (config, roomId). El password cifra el signaling (SDP).
+  // NUEVO: pasamos turnConfig con los servidores públicos
   room = joinRoom(
-    { appId: 'p2p-chat-demo-v1', password: password || undefined },
+    {
+      appId: 'p2p-chat-demo-v1',
+      password: password || undefined,
+      turnConfig: PUBLIC_TURN_SERVERS   // ← aquí se activan los relays
+    },
     roomName
   )
 
@@ -211,6 +239,7 @@ async function connect() {
   updateStatus()
   addSystem(password ? '🔐 E2EE activo (contraseña)' : '🔓 Sin E2EE (solo DTLS)')
   addSystem('Esperando a otros peers…')
+  addSystem('🛣️ TURN público configurado (3 relays de respaldo)')
 }
 
 els.connect.addEventListener('click', connect)
