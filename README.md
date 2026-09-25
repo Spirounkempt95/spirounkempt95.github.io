@@ -90,21 +90,8 @@ Once connected, click the peer in the status bar → **View SAS**. Compare the 6
 ---
 
 ## How it works
-┌────────────────┐ ┌────────────────┐
-│ Browser A │ │ Browser B │
-│ │ │ │
-│ ┌──────────┐ │ │ ┌──────────┐ │
-│ │ P2P Chat │ │◄───────►│ │ P2P Chat │ │
-│ └──────────┘ │ WebRTC │ └──────────┘ │
-│ ▲ ▲ │ (DTLS) │ ▲ ▲ │
-│ │ │ │ │ │ │ │
-│ UI Crypto │ │ UI Crypto │
-│ Worker │ │ Worker │
-└────┬───────────┘ └───────────┬────┘
-│ │
-└────────► Signaling ◄────────────┘
-(BitTorrent trackers / Nostr / MQTT)
 
+<img width="1738" height="905" alt="ChatGPT Image Sep 25, 2026, 11_17_07 AM" src="https://github.com/user-attachments/assets/3717a870-873b-4981-b31f-ff8097e74631" />
 
 
 1. **Signaling**: The two browsers find each other through a public, decentralized network — BitTorrent trackers by default, with Nostr and MQTT as fallbacks. If a password is set, the SDP messages (which contain the DTLS fingerprints) are encrypted before being sent, so a malicious signaling node cannot perform a MITM.
