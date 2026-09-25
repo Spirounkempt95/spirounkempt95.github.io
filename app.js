@@ -1060,6 +1060,7 @@ function applyTranslations(){
       UI.updateRoomStatus(UI.activeRoom());
       UI.renderMessages();
       UI.renderStats();
+      UI.renderStorage();
       const pinStatus = document.getElementById('pinStatus');
       if (pinStatus) {
         pinStatus.textContent = state.settings.pinEnabled ? '✅ ' + t('pin_lock') : '—';
@@ -1137,6 +1138,17 @@ function armInactivityWatch(){
     dlg.showModal();
   });
 }
+*/
+
+function showFileWarningDialog(fileName){
+  const dlg = document.getElementById('fileWarnDialog');
+  const body = document.getElementById('fileWarnBody');
+  const key = state.settings.saveFiles ? 'file_warn_saved_body' : 'file_warn_omitted_body';
+  body.textContent = t(key, { name: fileName });
+  document.getElementById('fileWarnDont').checked = false;
+  dlg.showModal();
+}
+
 
 /* ============ CREATE / RESTORE ROOMS ============ */
 async function createChat({ name, password, nickname }){
@@ -1443,12 +1455,9 @@ async function init(){
   };
   */
 
+
     document.getElementById('attach').onclick = () => {
-    if (state.settings.fileWarnShown){
-      document.getElementById('filePicker').click();
-      return;
-    }
-    document.getElementById('fileWarnDialog').showModal();
+    document.getElementById('filePicker').click();
   };
   document.getElementById('fileWarnOk').onclick = async () => {
     if (document.getElementById('fileWarnDont').checked){
@@ -1456,8 +1465,17 @@ async function init(){
       await db.put('settings', { key:'main', val: state.settings });
     }
     document.getElementById('fileWarnDialog').close();
-    // Importante: el click del botón ES el gesto de usuario → aquí SÍ se abre el picker
-    document.getElementById('filePicker').click();
+  };
+
+    document.getElementById('filePicker').onchange = async e => {
+    const r = UI.activeRoom(); if (!r) return;
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    for (const f of files) await r.sendFile(f);
+    if (!state.settings.fileWarnShown){
+      showFileWarningDialog(files[0].name);
+    }
   };
 
 
@@ -1471,7 +1489,7 @@ async function init(){
     const ok = await maybeShowFileWarning();
     if (!ok) return;
     for (const f of e.dataTransfer.files) await r.sendFile(f);
-  });*/
+  });
 
     area.addEventListener('drop', async e => {
     e.preventDefault(); overlay.classList.remove('on');
@@ -1481,6 +1499,19 @@ async function init(){
       return;
     }
     for (const f of e.dataTransfer.files) await r.sendFile(f);
+  });
+
+  */
+
+    area.addEventListener('drop', async e => {
+    e.preventDefault(); overlay.classList.remove('on');
+    const r = UI.activeRoom(); if (!r) return;
+    const files = [...e.dataTransfer.files];
+    if (!files.length) return;
+    for (const f of files) await r.sendFile(f);
+    if (!state.settings.fileWarnShown){
+      showFileWarningDialog(files[0].name);
+    }
   });
 
   document.addEventListener('keydown', e => {

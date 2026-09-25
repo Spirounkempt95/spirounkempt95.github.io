@@ -68,7 +68,10 @@ padding:3px 8px;font-size:.85em;font-weight:600}
 .msg-actions{position:absolute;top:-6px;right:-6px;opacity:0;transition:opacity .15s;
 background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:2px;
 display:flex;gap:2px;pointer-events:none}
-.msg.selected{outline:2px solid var(--accent);outline-offset:2px}
+.msg{transition:box-shadow .15s ease}
+.msg.selected{
+  box-shadow: 0 0 0 2px rgba(110,168,254,.35), 0 4px 20px rgba(110,168,254,.2);
+}
 .msg.selected .msg-actions{opacity:1;pointer-events:auto}
 
 .msg-actions button{background:transparent;border:none;color:var(--muted);padding:2px 5px;
@@ -362,10 +365,10 @@ outline:none;width:220px}
 <dialog id="fileWarnDialog">
   <div class="dlg-head">
     <h3 data-i18n="file_warn_title"></h3>
-    <p data-i18n="file_warn_body"></p>
   </div>
   <div class="dlg-body">
-    <label style="display:flex;gap:8px;align-items:center;font-size:.85em">
+    <p id="fileWarnBody" style="margin:0;font-size:.87em;line-height:1.5;color:var(--text)"></p>
+    <label style="display:flex;gap:8px;align-items:center;font-size:.85em;margin-top:14px">
       <input type="checkbox" id="fileWarnDont"> <span data-i18n="dont_show_again"></span>
     </label>
   </div>
