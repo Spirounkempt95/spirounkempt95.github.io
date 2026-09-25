@@ -91,19 +91,19 @@ Una vez conectado, haz clic en el contacto en la barra de estado → **Ver SAS**
 
 ```
 ┌────────────────┐                          ┌────────────────┐
-│  Navegador A    │                          │  Navegador B    │
-│                 │                          │                 │
+│  Navegador A      │                          │  Navegador B      │
+│                   │                          │                   │
 │  ┌──────────┐   │                          │  ┌──────────┐   │
-│  │ P2P Chat │   │◄────────────────────────►│  │ P2P Chat │   │
+│  │ P2P Chat │   │◄────────────────────────►│ │ P2P Chat │   │
 │  └──────────┘   │        WebRTC (DTLS)     │  └──────────┘   │
-│     ▲     ▲     │                          │     ▲     ▲     │
-│     │     │      │                          │     │     │      │
-│    UI   Crypto  │                          │    UI   Crypto  │
-│         Worker  │                          │         Worker  │
-└────┬────────────┘                          └───────────┬────┘
-     │                                                    │
-     └────────────► Señalización ◄───────────────────────┘
-          (trackers BitTorrent / Nostr / MQTT)
+│     ▲     ▲      │                          │     ▲     ▲     │
+│     │      │      │                          │     │     │      │
+│    UI   Crypto    │                          │    UI   Crypto    │
+│         Worker    │                          │         Worker    │
+└────┬───────────┘                          └───────────┬────┘
+      │                                                      │
+      └────────────► Señalización ◄────────────────────┘
+                 (trackers BitTorrent / Nostr / MQTT)
 ```
 
 1. **Señalización**: los dos navegadores se encuentran a través de una red pública y descentralizada — trackers de BitTorrent por defecto, con Nostr y MQTT como alternativas. Si se ha establecido una contraseña, los mensajes SDP (que contienen las huellas DTLS) se cifran antes de enviarse, de modo que un nodo de señalización malicioso no puede realizar un MITM.
