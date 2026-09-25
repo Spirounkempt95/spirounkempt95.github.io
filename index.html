@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Chat P2P</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1d2129;--border:#262a35;--text:#e6e8ee;
+--muted:#8b91a1;--accent:#6ea8fe;--ok:#4ade80;--warn:#fbbf24;--err:#f87171;
+--self:#2a3b5c;--other:#232733}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);overflow:hidden;
+font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px}
+button{font-family:inherit;cursor:pointer}
+input,textarea{font-family:inherit}
+#app{display:flex;flex-direction:column;height:100dvh}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);
+border-bottom:1px solid var(--border);flex-shrink:0}
+.icon-btn{background:transparent;border:none;color:var(--text);font-size:20px;
+padding:6px 10px;border-radius:8px;line-height:1}
+.icon-btn:hover{background:var(--panel2)}
+#tabs{flex:1;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;
+background:var(--panel2);border:1px solid transparent;color:var(--muted);
+white-space:nowrap;font-size:13px;flex-shrink:0;max-width:160px}
+.tab.active{color:var(--text);border-color:var(--accent);background:var(--bg)}
+.tab .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.tab .dot.on{background:var(--ok)}
+.tab .badge{background:var(--accent);color:#0b1220;font-size:10px;font-weight:700;
+border-radius:10px;padding:1px 6px}
+.tab .close{opacity:.6;padding:0 2px;font-size:14px;background:none;border:none;color:inherit}
+.tab .close:hover{opacity:1}
+#chatArea{flex:1;display:flex;flex-direction:column;min-height:0;position:relative}
+#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+height:100%;color:var(--muted);gap:12px;padding:24px;text-align:center}
+#messages{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px}
+.msg{max-width:78%;padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.4;
+word-wrap:break-word;overflow-wrap:anywhere;position:relative}
+.msg .meta{display:flex;gap:6px;align-items:center;font-size:10.5px;color:var(--muted);
+margin-bottom:3px;font-variant-numeric:tabular-nums}
+.msg .lock{font-size:10px}
+.msg.self{align-self:flex-end;background:var(--self);border-bottom-right-radius:4px}
+.msg.other{align-self:flex-start;background:var(--other);border-bottom-left-radius:4px}
+.msg.system{align-self:center;background:transparent;color:var(--muted);font-size:12px;
+padding:2px 8px;max-width:100%;text-align:center}
+.msg.error{color:var(--err)}
+.msg .status{font-size:10px;color:var(--muted);margin-left:6px}
+.msg img,.msg video{max-width:100%;border-radius:8px;margin-top:4px;display:block}
+.msg a{color:var(--accent);text-decoration:none;word-break:break-all}
+.msg a:hover{text-decoration:underline}
+.msg .file{display:flex;align-items:center;gap:8px;margin-top:4px;padding:6px 8px;
+background:rgba(0,0,0,.2);border-radius:6px;font-size:12px}
+.msg .file button{background:var(--accent);color:#0b1220;border:none;border-radius:4px;
+padding:3px 8px;font-size:11px;font-weight:600}
+#composer{display:flex;gap:6px;padding:8px 12px;background:var(--panel);
+border-top:1px solid var(--border);flex-shrink:0}
+#input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+padding:10px 14px;border-radius:20px;font-size:14px;outline:none;resize:none;
+min-height:40px;max-height:120px;line-height:1.4}
+#input:focus{border-color:var(--accent)}
+#attach{background:transparent;border:none;color:var(--muted);font-size:20px;padding:0 8px}
+#send{background:var(--accent);color:#0b1220;border:none;width:40px;height:40px;
+border-radius:50%;font-size:16px;font-weight:700}
+#send:disabled{opacity:.4}
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
+transition:opacity .2s;z-index:40}
+#backdrop.on{opacity:1;pointer-events:auto}
+#drawer{position:fixed;top:0;left:0;bottom:0;width:min(360px,88vw);background:var(--panel);
+z-index:50;transform:translateX(-100%);transition:transform .25s;
+display:flex;flex-direction:column;border-right:1px solid var(--border)}
+#drawer.on{transform:none}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+border-bottom:1px solid var(--border)}
+.drawer-head h2{margin:0;font-size:16px}
+.drawer-tabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--border)}
+.drawer-tabs button{flex:1;padding:8px 4px;background:transparent;border:none;color:var(--muted);
+font-size:12px;border-bottom:2px solid transparent;font-weight:500}
+.drawer-tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.drawer-body{flex:1;overflow-y:auto;padding:12px 16px}
+.panel{display:none}
+.panel.on{display:block}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.field label{font-size:12px;color:var(--muted)}
+.field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--border);
+color:var(--text);padding:9px 11px;border-radius:8px;font-size:14px;outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.btn{background:var(--accent);color:#0b1220;border:none;padding:9px 14px;
+border-radius:8px;font-weight:600;font-size:13px}
+.btn.sec{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+.btn.danger{background:var(--err);color:#fff}
+.btn.block{width:100%;display:block;text-align:center}
+.list{display:flex;flex-direction:column;gap:6px}
+.list-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--panel2);
+border-radius:8px;font-size:13px}
+.list-item .info{flex:1;min-width:0}
+.list-item .name{font-weight:600}
+.list-item .sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;
+text-overflow:ellipsis}
+.list-item .actions{display:flex;gap:4px}
+#logs{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+line-height:1.5;background:#0b0d11;border:1px solid var(--border);border-radius:8px;
+padding:8px;max-height:60vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.log-line{padding:1px 0}
+.log-line .t{color:#5a6472}
+.log-line.info .m{color:#a9b0bf}
+.log-line.warn .m{color:var(--warn)}
+.log-line.err .m{color:var(--err)}
+.log-line.ok .m{color:var(--ok)}
+dialog{border:none;background:var(--panel);color:var(--text);border-radius:14px;
+padding:0;max-width:400px;width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.dlg-head{padding:16px 18px 8px}
+.dlg-head h3{margin:0 0 4px;font-size:16px}
+.dlg-head p{margin:0;font-size:12px;color:var(--muted);line-height:1.4}
+.dlg-body{padding:8px 18px 12px}
+.dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px 18px}
+.sas-code{font-family:ui-monospace,monospace;font-size:28px;letter-spacing:3px;
+text-align:center;padding:16px;background:var(--bg);border-radius:10px;border:1px solid var(--border);
+margin:10px 0;font-weight:700}
+.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0}
+.warn-box{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
+color:var(--warn);padding:10px;border-radius:8px;font-size:12px;line-height:1.4}
+#statusBar{padding:4px 12px;background:var(--bg);border-top:1px solid var(--border);
+font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+#statusBar .pill{padding:2px 8px;border-radius:10px;background:var(--panel2);
+border:1px solid var(--border)}
+#statusBar .pill.ok{color:var(--ok);border-color:rgba(74,222,128,.3)}
+#statusBar .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.3)}
+.typing{font-size:11px;color:var(--muted);font-style:italic;height:14px;padding:0 20px 4px}
+.drop-overlay{position:absolute;inset:0;background:rgba(110,168,254,.15);
+border:2px dashed var(--accent);display:none;align-items:center;justify-content:center;
+z-index:10;font-size:18px;font-weight:600;color:var(--accent);pointer-events:none}
+.drop-overlay.on{display:flex}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button class="icon-btn" id="menuBtn" aria-label="Menú">☰</button>
+    <div id="tabs"></div>
+    <button class="icon-btn" id="newChatBtn" aria-label="Nuevo chat">＋</button>
+  </header>
+  <div id="chatArea">
+    <div id="empty">
+      <div style="font-size:40px">🔒</div>
+      <div>Sin chats abiertos</div>
+      <button class="btn" id="emptyNew">Crear chat</button>
+    </div>
+    <div id="messages" hidden></div>
+    <div class="typing" id="typing"></div>
+    <div class="drop-overlay" id="dropOverlay">Suelta archivos aquí</div>
+  </div>
+  <div id="statusBar"></div>
+  <form id="composer" hidden>
+    <button type="button" id="attach" aria-label="Adjuntar">📎</button>
+    <textarea id="input" rows="1" placeholder="Escribe un mensaje…" autocomplete="off"></textarea>
+    <button type="submit" id="send" aria-label="Enviar">➤</button>
+  </form>
+</div>
+
+<div id="backdrop"></div>
+<aside id="drawer">
+  <div class="drawer-head">
+    <h2>Panel</h2>
+    <button class="icon-btn" id="closeDrawer" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="drawer-tabs">
+    <button data-tab="user" class="on">Usuario</button>
+    <button data-tab="contacts">Contactos</button>
+    <button data-tab="logs">Logs</button>
+    <button data-tab="settings">Ajustes</button>
+  </div>
+  <div class="drawer-body">
+    <section class="panel on" data-panel="user">
+      <div class="field"><label>Tu nombre</label><input id="setNickname" maxlength="32"></div>
+      <div class="field"><label>ID de sesión</label><input id="setSelfId" readonly></div>
+      <div class="field"><label>Huella pública (fingerprint)</label><input id="setFingerprint" readonly></div>
+      <p class="hint">Tu huella es única por sesión. Compártela por un canal seguro para que otros puedan verificarte.</p>
+    </section>
+    <section class="panel" data-panel="contacts">
+      <p class="hint">Contactos guardados localmente. Solo tú los ves.</p>
+      <div id="contactsList" class="list"></div>
+    </section>
+    <section class="panel" data-panel="logs">
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn sec" id="logFilterAll">Todo</button>
+        <button class="btn sec" id="logFilterConn">Conexión</button>
+        <button class="btn sec" id="logFilterMsg">Mensajes</button>
+        <button class="btn sec" id="logClear">Limpiar</button>
+      </div>
+      <div id="logs"></div>
+    </section>
+    <section class="panel" data-panel="settings">
+      <div class="field"><label><input type="checkbox" id="optNotif"> Notificaciones del navegador</label></div>
+      <div class="field"><label><input type="checkbox" id="optSound"> Sonido al recibir</label></div>
+      <div class="field"><label><input type="checkbox" id="optLogs"> Persistir logs en IndexedDB</label></div>
+      <div class="field"><label>Estrategia de signaling</label>
+        <select id="optStrategy">
+          <option value="auto">Auto (fallback torrent→nostr→mqtt)</option>
+          <option value="torrent">Torrent</option>
+          <option value="nostr">Nostr</option>
+          <option value="mqtt">MQTT</option>
+        </select>
+      </div>
+      <button class="btn danger block" id="clearAll">Borrar todos los datos locales</button>
+    </section>
+  </div>
+</aside>
+
+<dialog id="newChatDialog">
+  <form id="newChatForm">
+    <div class="dlg-head">
+      <h3>Nuevo chat</h3>
+      <p>El nombre define la sala. La contraseña cifra mensajes y signaling.</p>
+    </div>
+    <div class="dlg-body">
+      <div class="field"><label>Nombre de la sala</label><input name="room" required maxlength="64"></div>
+      <div class="field"><label>Contraseña (opcional)</label><input name="password" type="password" maxlength="128"></div>
+      <div class="field"><label>Tu nombre en este chat</label><input name="nickname" maxlength="32"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn sec" value="cancel">Cancelar</button>
+      <button type="submit" class="btn">Abrir</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="sasDialog">
+  <div class="dlg-head">
+    <h3>Verificación de identidad</h3>
+    <p>Compara este código con tu contacto por un canal seguro (en persona, Signal, etc.).</p>
+  </div>
+  <div class="dlg-body">
+    <div class="sas-code" id="sasCode">— — —</div>
+    <p class="hint" id="sasPeer"></p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn sec" id="sasCancel">Cerrar</button>
+    <button class="btn" id="sasVerify">Marcar verificado</button>
+  </div>
+</dialog>
+
+<input type="file" id="filePicker" multiple style="display:none">
+
+<script type="module">
+import { joinRoom, selfId } from 'https://esm.sh/trystero@0.21.6/torrent'
+import { joinRoom as joinRoomNostr } from 'https://esm.sh/trystero@0.21.6/nostr'
+import { joinRoom as joinRoomMqtt } from 'https://esm.sh/trystero@0.21.6/mqtt'
+
+/* ============ CONSTANTES ============ */
+const APP_ID = 'p2p-chat-v2'
+const DB_NAME = 'p2p-chat'
+const DB_VERSION = 1
+const MAX_LOGS = 800
+const CHUNK_SIZE = 8 * 1024
+const RATE_LIMIT = { max: 30, window: 10000 }
+const TURN_SERVERS = [
+  { urls:['turn:turn.evan-brass.net','turn:turn.evan-brass.net?transport=tcp','turns:turn.evan-brass.net:443?transport=tcp'],
+    username:'user', credential:'password' },
+  { urls:['turn:openrelay.metered.ca:80'], username:'openrelayproject', credential:'openrelayproject' },
+  { urls:['turn:relay1.expressturn.com:3478'], username:'ef0f8b5c7a2d3e4f', credential:'a1b2c3d4e5f6' }
+]
+
+/* ============ INDEXEDDB ============ */
+class DB {
+  constructor(){ this.db=null }
+  async open(){
+    if(this.db) return this.db
+    this.db = await new Promise((res,rej)=>{
+      const r = indexedDB.open(DB_NAME, DB_VERSION)
+      r.onupgradeneeded = e => {
+        const db = e.target.result
+        if(!db.objectStoreNames.contains('messages'))
+          db.createObjectStore('messages',{keyPath:'key'}).createIndex('room','roomId')
+        if(!db.objectStoreNames.contains('contacts'))
+          db.createObjectStore('contacts',{keyPath:'id'})
+        if(!db.objectStoreNames.contains('settings'))
+          db.createObjectStore('settings',{keyPath:'key'})
+        if(!db.objectStoreNames.contains('logs'))
+          db.createObjectStore('logs',{keyPath:'id',autoIncrement:true})
+      }
+      r.onsuccess = () => res(r.result)
+      r.onerror = () => rej(r.error)
+    })
+    return this.db
+  }
+  async tx(store, mode, fn){
+    const db = await this.open()
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(store, mode)
+      const s = tx.objectStore(store)
+      const out = fn(s)
+      tx.oncomplete = () => res(out?.result ?? out)
+      tx.onerror = () => rej(tx.error)
+    })
+  }
+  get(store,key){ return this.tx(store,'readonly',s=>s.get(key)) }
+  put(store,val){ return this.tx(store,'readwrite',s=>s.put(val)) }
+  del(store,key){ return this.tx(store,'readwrite',s=>s.delete(key)) }
+  all(store){ return this.tx(store,'readonly',s=>s.getAll()) }
+  byIndex(store,index,val){ return this.tx(store,'readonly',s=>s.index(index).getAll(val)) }
+  clear(store){ return this.tx(store,'readwrite',s=>s.clear()) }
+}
+const db = new DB()
+
+/* ============ CRYPTO ============ */
+const enc = new TextEncoder(), dec = new TextDecoder()
+const b64e = buf => { const b=new Uint8Array(buf); let s=''; for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s) }
+const b64d = s => { const bin=atob(s), out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out }
+
+async function deriveKey(password, salt){
+  const km = await crypto.subtle.importKey('raw', enc.encode(password),'PBKDF2',false,['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: enc.encode(salt), iterations: 200000, hash:'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt'])
+}
+async function encryptJSON(key, obj){
+  if(!key) return { enc:0, data:obj }
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(JSON.stringify(obj)))
+  return { enc:1, iv:Array.from(iv), data:b64e(ct) }
+}
+async function decryptJSON(key, p){
+  if(!p.enc) return p.data
+  if(!key) throw new Error('sin clave')
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(p.iv)}, key, b64d(p.data))
+  return JSON.parse(dec.decode(pt))
+}
+// ECDH para SAS
+async function genECDH(){
+  return crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'}, true, ['deriveBits'])
+}
+async function exportPub(k){
+  const raw = await crypto.subtle.exportKey('raw', k)
+  const hash = await crypto.subtle.digest('SHA-256', raw)
+  return { raw: b64e(raw), fp: b64e(hash).slice(0,16) }
+}
+async function deriveSAS(privKey, theirRawB64){
+  const raw = b64d(theirRawB64)
+  const theirKey = await crypto.subtle.importKey('raw', raw, {name:'ECDH',namedCurve:'P-256'}, false, [])
+  const bits = await crypto.subtle.deriveBits({name:'ECDH',public:theirKey}, privKey, 256)
+  const hash = await crypto.subtle.digest('SHA-256', bits)
+  const n = new DataView(hash).getUint32(0) % 1000000
+  return String(n).padStart(6,'0').replace(/(\d{3})(\d{3})/,'$1 $2')
+}
+
+/* ============ LOGGER ============ */
+const Logger = {
+  entries: [],
+  filter: 'all',
+  listeners: [],
+  add(level, category, message, data){
+    const e = { t: Date.now(), level, category, message, data }
+    this.entries.push(e)
+    if(this.entries.length > MAX_LOGS) this.entries.shift()
+    this.render()
+    // eslint-disable-next-line no-console
+    if(level==='err') console.error('[%s] %s', category, message, data||'')
+    else if(level==='warn') console.warn('[%s] %s', category, message, data||'')
+    else console.log('[%s] %s', category, message, data||'')
+    if(state?.settings?.persistLogs){
+      db.put('logs', { t:e.t, level, category, message, data }).catch(()=>{})
+    }
+  },
+  info(c,m,d){ this.add('info',c,m,d) },
+  ok(c,m,d){ this.add('ok',c,m,d) },
+  warn(c,m,d){ this.add('warn',c,m,d) },
+  err(c,m,d){ this.add('err',c,m,d) },
+  render(){
+    const el = document.getElementById('logs')
+    if(!el) return
+    const filt = this.entries.filter(e => this.filter==='all' || e.category.startsWith(this.filter))
+    const last = filt.slice(-300)
+    el.innerHTML = last.map(e => {
+      const time = new Date(e.t).toLocaleTimeString()
+      const data = e.data ? ' ' + JSON.stringify(e.data) : ''
+      return `<div class="log-line ${e.level}"><span class="t">${time}</span> <span class="m">[${e.category}] ${escapeHtml(e.message)}${escapeHtml(data)}</span></div>`
+    }).join('')
+    el.scrollTop = el.scrollHeight
+  }
+}
+
+/* ============ UTIL ============ */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+function linkify(text){
+  const parts = text.split(/(https?:\/\/[^\s<]+)/g)
+  return parts.map(p => /^https?:\/\//.test(p)
+    ? `<a href="${escapeHtml(p)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(p)}</a>`
+    : escapeHtml(p)).join('')
+}
+function fmtBytes(n){
+  if(n<1024) return n+' B'
+  if(n<1048576) return (n/1024).toFixed(1)+' KB'
+  if(n<1073741824) return (n/1048576).toFixed(1)+' MB'
+  return (n/1073741824).toFixed(2)+' GB'
+}
+function toast(msg, kind='info'){
+  Logger[kind]('ui', msg)
+}
+
+/* ============ ESTADO ============ */
+const state = {
+  settings: { nickname:'', notifications:false, sound:true, persistLogs:false, strategy:'auto' },
+  contacts: [],
+  rooms: new Map(), // roomId -> Room
+  activeRoomId: null,
+  ecdh: { pub:null, priv:null, fp:null }
+}
+
+/* ============ RATE LIMITER ============ */
+class RateLimiter {
+  constructor(max, windowMs){ this.max=max; this.windowMs=windowMs; this.buckets=new Map() }
+  check(peerId){
+    const now = Date.now()
+    let b = this.buckets.get(peerId)
+    if(!b){ b=[]; this.buckets.set(peerId,b) }
+    while(b.length && now-b[0] > this.windowMs) b.shift()
+    if(b.length >= this.max) return false
+    b.push(now); return true
+  }
+}
+
+/* ============ FILE TRANSFER ============ */
+class FileReceiver {
+  constructor(){ this.transfers = new Map() }
+  start(id, meta){
+    this.transfers.set(id, { ...meta, chunks:[], received:0 })
+  }
+  chunk(id, index, dataB64){
+    const t = this.transfers.get(id); if(!t) return
+    t.chunks[index] = b64d(dataB64)
+    t.received++
+  }
+  async end(id){
+    const t = this.transfers.get(id); if(!t) return null
+    this.transfers.delete(id)
+    const blob = new Blob(t.chunks, { type: t.mime || 'application/octet-stream' })
+    return { blob, name: t.name, mime: t.mime, size: t.size }
+  }
+}
+
+/* ============ ROOM ============ */
+class Room {
+  constructor(id, name, password, nickname){
+    this.id = id
+    this.name = name
+    this.password = password
+    this.nickname = nickname || state.settings.nickname || 'Anónimo'
+    this.cryptoKey = null
+    this.trysteroRoom = null
+    this.sendRaw = null
+    this.sendCtrl = null
+    this.peers = new Map() // peerId -> { nickname, sas, verified, pc, conn }
+    this.messages = [] // { id, peerId, nickname, text, type, ts, status, encrypted, file? }
+    this.unread = 0
+    this.status = 'disconnected'
+    this.ecdh = null
+    this.rateLimiter = new RateLimiter(RATE_LIMIT.max, RATE_LIMIT.window)
+    this.fileReceiver = new FileReceiver()
+    this.pendingQueue = [] // mensajes pendientes de ACK
+    this.typingTimeout = null
+    this.strategy = null
+    this.icePollTimer = null
+  }
+
+  async init(){
+    if(this.password){
+      this.cryptoKey = await deriveKey(this.password, 'p2p-chat-v1:'+this.name)
+    }
+    this.ecdh = await genECDH()
+    const pub = await exportPub(this.ecdh.publicKey)
+    this.myFingerprint = pub.fp
+    this.myPubRaw = pub.raw
+    await this.loadMessages()
+  }
+
+  async loadMessages(){
+    try {
+      const stored = await db.byIndex('messages','room', this.id)
+      this.messages = stored.map(m => m.msg).sort((a,b)=>a.ts-b.ts)
+      // Reintentar mensajes pendientes
+      this.pendingQueue = this.messages.filter(m => m.status === 'pending' && !m.peerId)
+    } catch(e){ Logger.warn('db','Error cargando mensajes', e.message) }
+  }
+
+  async persistMessage(msg){
+    try {
+      await db.put('messages', { key: this.id+':'+msg.id, roomId: this.id, msg })
+    } catch(e){ Logger.warn('db','Error persistiendo mensaje', e.message) }
+  }
+
+  async deleteMessage(msgId){
+    this.messages = this.messages.filter(m => m.id !== msgId)
+    try { await db.del('messages', this.id+':'+msgId) } catch{}
+    UI.renderMessages()
+  }
+
+  async clearMessages(){
+    this.messages = []
+    try {
+      const stored = await db.byIndex('messages','room', this.id)
+      for(const s of stored) await db.del('messages', s.key)
+    } catch{}
+    UI.renderMessages()
+  }
+
+  async connect(){
+    this.status = 'connecting'
+    UI.updateRoomStatus(this)
+    Logger.info('conn', `Conectando a "${this.name}" (${this.strategy || state.settings.strategy})`)
+
+    const cfg = {
+      appId: APP_ID,
+      password: this.password || undefined,
+      turnConfig: TURN_SERVERS
+    }
+
+    const strategy = this.strategy || state.settings.strategy
+    const strategies = strategy === 'auto' ? ['torrent','nostr','mqtt'] : [strategy]
+    let lastErr = null
+
+    for(const strat of strategies){
+      try {
+        const joinFn = strat === 'torrent' ? joinRoom : strat === 'nostr' ? joinRoomNostr : joinRoomMqtt
+        this.trysteroRoom = joinFn(cfg, this.name)
+        this.strategy = strat
+        Logger.ok('conn', `Signaling OK via ${strat}`)
+        break
+      } catch(e){
+        lastErr = e
+        Logger.warn('conn', `Fallo signaling ${strat}`, e.message)
+      }
+    }
+    if(!this.trysteroRoom){
+      this.status = 'error'
+      Logger.err('conn', 'No se pudo inicializar signaling', lastErr?.message)
+      UI.updateRoomStatus(this); return
+    }
+
+    const [sendMsg, getMsg] = this.trysteroRoom.makeAction('msg')
+    const [sendCtrl, getCtrl] = this.trysteroRoom.makeAction('ctrl')
+    this.sendRaw = sendMsg
+    this.sendCtrl = sendCtrl
+
+    getMsg(async (payload, peerId) => {
+      if(!this.rateLimiter.check(peerId)){
+        Logger.warn('msg', `Rate limit alcanzado para ${peerId.slice(0,6)}`)
+        return
+      }
+      await this.handleIncoming(payload, peerId)
+    })
+
+    getCtrl(async (payload, peerId) => {
+      if(!this.rateLimiter.check(peerId)) return
+      await this.handleControl(payload, peerId)
+    })
+
+    this.trysteroRoom.onPeerJoin(async peerId => {
+      Logger.ok('conn', `Peer conectado: ${peerId.slice(0,8)}`)
+      this.peers.set(peerId, { nickname: null, sas: null, verified: false, pc: null })
+      // Enviar pubkey ECDH
+      const pub = await exportPub(this.ecdh.publicKey)
+      sendCtrl({ t:'pub', raw: pub.raw }, peerId)
+      // Enviar nickname
+      sendCtrl({ t:'nick', nickname: this.nickname }, peerId)
+      // Reintentar pendientes
+      this.flushPending()
+      // Empezar a sondear ICE
+      this.startIcePoll()
+      UI.updateRoomStatus(this)
+      UI.renderMessages()
+    })
+
+    this.trysteroRoom.onPeerLeave(peerId => {
+      Logger.warn('conn', `Peer desconectado: ${peerId.slice(0,8)}`)
+      this.peers.delete(peerId)
+      UI.updateRoomStatus(this)
+      UI.renderMessages()
+      // Notificar
+      if(state.settings.notifications && document.hidden){
+        new Notification(`Chat ${this.name}`, { body: 'Un peer se ha desconectado' })
+      }
+    })
+
+    this.status = 'connected'
+    UI.updateRoomStatus(this)
+    this.flushPending()
+  }
+
+  async flushPending(){
+    if(!this.peers.size) return
+    const pending = this.messages.filter(m => m.status === 'pending' && m.self)
+    for(const m of pending){
+      try {
+        await this.sendMessage(m, true)
+        Logger.info('msg', `Reenviado pendiente ${m.id.slice(0,8)}`)
+      } catch(e){ Logger.warn('msg', 'Error reenviando', e.message) }
+    }
+  }
+
+  async handleControl(payload, peerId){
+    const peer = this.peers.get(peerId) || { }
+    if(payload.t === 'pub'){
+      const sas = await deriveSAS(this.ecdh.privateKey, payload.raw)
+      peer.pubRaw = payload.raw
+      peer.sas = sas
+      this.peers.set(peerId, peer)
+      Logger.info('sas', `SAS con ${peerId.slice(0,6)}: ${sas}`)
+    } else if(payload.t === 'nick'){
+      peer.nickname = String(payload.nickname || '').slice(0,32) || peerId.slice(0,6)
+      this.peers.set(peerId, peer)
+    } else if(payload.t === 'ack'){
+      const msg = this.messages.find(m => m.id === payload.id)
+      if(msg && msg.status !== 'delivered'){
+        msg.status = 'delivered'
+        await this.persistMessage(msg)
+        UI.renderMessages()
+      }
+    } else if(payload.t === 'typing'){
+      const t = document.getElementById('typing')
+      if(t){
+        t.textContent = `${peer.nickname || peerId.slice(0,6)} está escribiendo…`
+        clearTimeout(this.typingTimeout)
+        this.typingTimeout = setTimeout(()=>{ t.textContent='' }, 3000)
+      }
+    } else if(payload.t === 'delete'){
+      await this.deleteMessage(payload.id)
+    }
+  }
+
+  async handleIncoming(payload, peerId){
+    let env
+    try {
+      env = await decryptJSON(this.cryptoKey, payload)
+    } catch(e){
+      Logger.warn('msg', `No se pudo descifrar mensaje de ${peerId.slice(0,6)}`)
+      return
+    }
+    const peer = this.peers.get(peerId) || {}
+    const nickname = peer.nickname || peerId.slice(0,6)
+
+    if(env.t === 'text'){
+      const msg = {
+        id: env.id, peerId, nickname, text: env.text, type:'text',
+        ts: env.ts, status:'delivered', encrypted: !!this.cryptoKey, self:false
+      }
+      this.messages.push(msg)
+      await this.persistMessage(msg)
+      this.sendCtrl({ t:'ack', id: env.id }, peerId)
+      UI.renderMessages()
+      this.notify(nickname, env.text)
+    } else if(env.t === 'file-start'){
+      this.fileReceiver.start(env.id, env.meta)
+      Logger.info('file', `Recibiendo ${env.meta.name} (${fmtBytes(env.meta.size)})`)
+    } else if(env.t === 'file-chunk'){
+      this.fileReceiver.chunk(env.id, env.index, env.data)
+    } else if(env.t === 'file-end'){
+      const result = await this.fileReceiver.end(env.id)
+      if(result){
+        const url = URL.createObjectURL(result.blob)
+        const isImage = result.mime.startsWith('image/')
+        const isVideo = result.mime.startsWith('video/')
+        const msg = {
+          id: env.id, peerId, nickname, type:'file',
+          ts: env.ts, status:'delivered', encrypted: !!this.cryptoKey, self:false,
+          file: { name: result.name, size: result.size, mime: result.mime, url,
+                  isImage, isVideo }
+        }
+        this.messages.push(msg)
+        await this.persistMessage(msg)
+        this.sendCtrl({ t:'ack', id: env.id }, peerId)
+        UI.renderMessages()
+        this.notify(nickname, `Archivo: ${result.name}`)
+      }
+    }
+  }
+
+  async sendMessage(msgOrText, isResend=false){
+    if(typeof msgOrText === 'string'){
+      const msg = {
+        id: crypto.randomUUID(), self:true, type:'text', text: msgOrText,
+        ts: Date.now(), status: this.peers.size ? 'sent' : 'pending',
+        encrypted: !!this.cryptoKey
+      }
+      this.messages.push(msg)
+      await this.persistMessage(msg)
+      UI.renderMessages()
+      if(!this.peers.size){ return msg }
+      const payload = await encryptJSON(this.cryptoKey, { t:'text', id: msg.id, text: msg.text, ts: msg.ts })
+      this.sendRaw(payload)
+      return msg
+    } else {
+      // Reenvío
+      const m = msgOrText
+      const payload = await encryptJSON(this.cryptoKey, { t:'text', id: m.id, text: m.text, ts: m.ts })
+      this.sendRaw(payload)
+    }
+  }
+
+  async sendFile(file){
+    if(!this.peers.size){ toast('No hay peers conectados', 'warn'); return }
+    const id = crypto.randomUUID()
+    const meta = { name: file.name, size: file.size, mime: file.type || 'application/octet-stream' }
+    Logger.info('file', `Enviando ${meta.name} (${fmtBytes(meta.size)})`)
+
+    const msg = {
+      id, self:true, type:'file', ts: Date.now(), status:'sent',
+      encrypted: !!this.cryptoKey, file: { ...meta, url: URL.createObjectURL(file),
+        isImage: meta.mime.startsWith('image/'), isVideo: meta.mime.startsWith('video/') }
+    }
+    this.messages.push(msg)
+    await this.persistMessage(msg)
+    UI.renderMessages()
+
+    const start = await encryptJSON(this.cryptoKey, { t:'file-start', id, meta, ts: msg.ts })
+    this.sendRaw(start)
+    const buf = await file.arrayBuffer()
+    const chunks = Math.ceil(buf.byteLength / CHUNK_SIZE)
+    for(let i=0;i<chunks;i++){
+      const slice = buf.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE)
+      const payload = await encryptJSON(this.cryptoKey, { t:'file-chunk', id, index:i, data: b64e(slice) })
+      this.sendRaw(payload)
+      await new Promise(r => setTimeout(r, 5))
+    }
+    const end = await encryptJSON(this.cryptoKey, { t:'file-end', id, ts: Date.now() })
+    this.sendRaw(end)
+  }
+
+  notify(title, body){
+    if(!state.settings.notifications) return
+    if(!document.hidden) return
+    if(Notification.permission === 'granted'){
+      new Notification(`💬 ${title}`, { body: body.slice(0,120), tag: this.id })
+    }
+    if(state.settings.sound){
+      try {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)()
+        const o = ctx.createOscillator(), g = ctx.createGain()
+        o.connect(g); g.connect(ctx.destination)
+        o.frequency.value = 660; g.gain.value = 0.05
+        o.start(); setTimeout(()=>{o.stop(); ctx.close()}, 120)
+      } catch{}
+    }
+  }
+
+  startIcePoll(){
+    if(this.icePollTimer) return
+    this.icePollTimer = setInterval(async () => {
+      const pcs = this.trysteroRoom?.getPeers?.() || {}
+      for(const [peerId, pc] of Object.entries(pcs)){
+        if(!pc || !pc.getStats) continue
+        try {
+          const stats = await pc.getStats()
+          let local='', remote='', proto='', relay=false, type=''
+          stats.forEach(r => {
+            if(r.type==='candidate-pair' && r.state==='succeeded' && (r.nominated||r.selected)){
+              stats.forEach(x => {
+                if(x.id===r.localCandidateId){ local=x.address||x.ip||''; proto=x.protocol||''; relay=x.candidateType==='relay'; type=x.candidateType||'' }
+                if(x.id===r.remoteCandidateId){ remote=x.address||x.ip||'' }
+              })
+            }
+          })
+          if(local || remote){
+            const peer = this.peers.get(peerId) || {}
+            const changed = peer.localIp !== local || peer.remoteIp !== remote || peer.relay !== relay
+            peer.localIp = local; peer.remoteIp = remote; peer.proto = proto; peer.relay = relay; peer.connType = type
+            this.peers.set(peerId, peer)
+            if(changed){
+              Logger.info('ice', `Peer ${peerId.slice(0,6)}: local=${local} remote=${remote} proto=${proto} relay=${relay} tipo=${type}`)
+              UI.renderMessages()
+              UI.updateRoomStatus(this)
+            }
+          }
+        } catch{}
+      }
+    }, 4000)
+  }
+
+  disconnect(){
+    clearInterval(this.icePollTimer); this.icePollTimer=null
+    try { this.trysteroRoom?.leave?.() } catch{}
+    this.trysteroRoom = null
+    this.peers.clear()
+    this.status = 'disconnected'
+    UI.updateRoomStatus(this)
+  }
+}
+
+/* ============ UI ============ */
+const UI = {
+  activeRoom(){
+    return state.rooms.get(state.activeRoomId)
+  },
+
+  renderTabs(){
+    const el = document.getElementById('tabs')
+    el.innerHTML = ''
+    for(const r of state.rooms.values()){
+      const t = document.createElement('button')
+      t.className = 'tab' + (r.id===state.activeRoomId ? ' active' : '')
+      const onlinePeers = [...r.peers.values()].length
+      const badge = r.unread > 0 ? `<span class="badge">${r.unread}</span>` : ''
+      t.innerHTML = `<span class="dot ${r.status==='connected'?'on':''}"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.name)}</span>
+        ${badge}<span class="close" data-close="${r.id}">✕</span>`
+      t.onclick = e => {
+        if(e.target.dataset.close){ this.closeRoom(r.id); return }
+        this.setActive(r.id)
+      }
+      el.appendChild(t)
+    }
+  },
+
+  async setActive(id){
+    state.activeRoomId = id
+    const r = state.rooms.get(id)
+    if(r){ r.unread = 0 }
+    this.renderTabs()
+    this.renderMessages()
+    this.updateRoomStatus(r)
+    document.getElementById('empty').hidden = !!r
+    document.getElementById('messages').hidden = !r
+    document.getElementById('composer').hidden = !r
+  },
+
+  closeRoom(id){
+    const r = state.rooms.get(id)
+    if(r){ r.disconnect(); state.rooms.delete(id) }
+    if(state.activeRoomId === id){
+      const next = state.rooms.keys().next().value
+      state.activeRoomId = next || null
+    }
+    this.renderTabs()
+    this.setActive(state.activeRoomId)
+  },
+
+  renderMessages(){
+    const r = this.activeRoom()
+    const el = document.getElementById('messages')
+    if(!r){ el.innerHTML=''; return }
+    el.innerHTML = ''
+    for(const m of r.messages){
+      const d = document.createElement('div')
+      d.className = 'msg ' + (m.self ? 'self' : 'other') + (m.type==='error'?' error':'')
+      const time = new Date(m.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+      const lock = m.encrypted ? '<span class="lock">🔒</span>' : '<span class="lock">🔓</span>'
+      const status = m.self && m.status ? `<span class="status">${m.status==='delivered'?'✓✓':m.status==='sent'?'✓':'⏳'}</span>` : ''
+      const who = m.self ? 'tú' : (m.nickname || (m.peerId||'').slice(0,6))
+      const meta = `<span class="meta">${lock}<span>${escapeHtml(who)}</span><span>·</span><span>${time}</span>${status}</span>`
+
+      if(m.type === 'text'){
+        d.innerHTML = meta + `<span>${linkify(m.text)}</span>`
+      } else if(m.type === 'file'){
+        let media = ''
+        if(m.file.isImage) media = `<img src="${m.file.url}" alt="${escapeHtml(m.file.name)}">`
+        else if(m.file.isVideo) media = `<video controls src="${m.file.url}"></video>`
+        d.innerHTML = meta + `<div class="file"><span>📎</span><span style="flex:1">${escapeHtml(m.file.name)}<br><small>${fmtBytes(m.file.size)}</small></span><a href="${m.file.url}" download="${escapeHtml(m.file.name)}"><button>Descargar</button></a></div>` + media
+      } else if(m.type === 'system'){
+        d.className = 'msg system'
+        d.textContent = m.text
+      }
+      el.appendChild(d)
+    }
+    el.scrollTop = el.scrollHeight
+  },
+
+  updateRoomStatus(r){
+    const el = document.getElementById('statusBar')
+    if(!r){ el.innerHTML=''; return }
+    const peers = [...r.peers.entries()]
+    const pills = []
+    pills.push(`<span class="pill ${r.status==='connected'?'ok':'warn'}">${r.status} (${r.strategy||'—'})</span>`)
+    pills.push(`<span class="pill">${peers.length} peer${peers.length===1?'':'s'}</span>`)
+    for(const [id, p] of peers){
+      const ipInfo = p.remoteIp ? ` · remoto ${p.remoteIp}` : ''
+      const relay = p.relay ? ' · relay' : ''
+      const ver = p.verified ? ' ✓' : ''
+      pills.push(`<span class="pill" title="local=${p.localIp||'?'} proto=${p.proto||'?'}">${escapeHtml(p.nickname||id.slice(0,6))}${ver}${ipInfo}${relay}</span>`)
+    }
+    el.innerHTML = pills.join(' ')
+  },
+
+  renderContacts(){
+    const el = document.getElementById('contactsList')
+    if(!state.contacts.length){ el.innerHTML = '<p class="hint">Aún no hay contactos guardados.</p>'; return }
+    el.innerHTML = state.contacts.map(c => `
+      <div class="list-item">
+        <div class="info">
+          <div class="name">${escapeHtml(c.nickname || c.id.slice(0,8))} ${c.verified?'✅':''}</div>
+          <div class="sub">fp: ${escapeHtml(c.fp||'—')}</div>
+        </div>
+        <div class="actions">
+          <button class="btn sec" data-del="${c.id}">Eliminar</button>
+        </div>
+      </div>`).join('')
+    el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+      await db.del('contacts', b.dataset.del)
+      state.contacts = state.contacts.filter(c => c.id !== b.dataset.del)
+      this.renderContacts()
+    })
+  },
+
+  renderSAS(peerId){
+    const r = this.activeRoom(); if(!r) return
+    const p = r.peers.get(peerId); if(!p) return
+    document.getElementById('sasCode').textContent = p.sas || 'esperando…'
+    document.getElementById('sasPeer').textContent = `Peer: ${p.nickname || peerId.slice(0,8)} — huella: ${p.pubRaw ? p.pubRaw.slice(0,16) : '—'}`
+    document.getElementById('sasVerify').onclick = async () => {
+      p.verified = true
+      r.peers.set(peerId, p)
+      await db.put('contacts', { id: peerId, nickname: p.nickname, fp: p.pubRaw?.slice(0,16), verified: true, at: Date.now() })
+      state.contacts = await db.all('contacts')
+      Logger.ok('sas', `Verificado: ${peerId.slice(0,6)}`)
+      document.getElementById('sasDialog').close()
+      this.renderContacts()
+      this.updateRoomStatus(r)
+      this.renderMessages()
+    }
+  }
+}
+
+/* ============ CREAR CHAT ============ */
+async function createChat({ name, password, nickname }){
+  const roomId = name.toLowerCase().trim()
+  if(state.rooms.has(roomId)){ UI.setActive(roomId); return }
+  const r = new Room(roomId, name.trim(), password||'', nickname)
+  await r.init()
+  state.rooms.set(roomId, r)
+  UI.renderTabs()
+  UI.setActive(roomId)
+  await r.connect()
+  Logger.info('app', `Chat "${name}" creado`)
+}
+
+/* ============ INIT ============ */
+async function init(){
+  // Cargar settings y contactos
+  try {
+    const s = await db.get('settings', 'main')
+    if(s?.val) Object.assign(state.settings, s.val)
+  } catch{}
+  state.contacts = await db.all('contacts').catch(()=>[]) || []
+
+  // ECDH global para fingerprint
+  state.ecdh = await genECDH()
+  const pub = await exportPub(state.ecdh.publicKey)
+  state.ecdh.pub = pub
+
+  // Rellenar UI
+  document.getElementById('setNickname').value = state.settings.nickname || ''
+  document.getElementById('setSelfId').value = selfId
+  document.getElementById('setFingerprint').value = pub.fp
+  document.getElementById('optNotif').checked = state.settings.notifications
+  document.getElementById('optSound').checked = state.settings.sound
+  document.getElementById('optLogs').checked = state.settings.persistLogs
+  document.getElementById('optStrategy').value = state.settings.strategy
+
+  // Eventos drawer
+  document.getElementById('menuBtn').onclick = () => {
+    document.getElementById('drawer').classList.add('on')
+    document.getElementById('backdrop').classList.add('on')
+    Logger.render()
+    UI.renderContacts()
+  }
+  const closeDrawer = () => {
+    document.getElementById('drawer').classList.remove('on')
+    document.getElementById('backdrop').classList.remove('on')
+  }
+  document.getElementById('closeDrawer').onclick = closeDrawer
+  document.getElementById('backdrop').onclick = closeDrawer
+
+  document.querySelectorAll('.drawer-tabs button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('.drawer-tabs button').forEach(x=>x.classList.remove('on'))
+      document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'))
+      b.classList.add('on')
+      document.querySelector(`.panel[data-panel="${b.dataset.tab}"]`).classList.add('on')
+      if(b.dataset.tab==='logs') Logger.render()
+    }
+  })
+
+  // Settings
+  document.getElementById('setNickname').onchange = async e => {
+    state.settings.nickname = e.target.value.slice(0,32)
+    await db.put('settings', { key:'main', val: state.settings })
+  }
+  document.getElementById('optNotif').onchange = async e => {
+    if(e.target.checked){
+      const p = await Notification.requestPermission()
+      if(p !== 'granted'){ e.target.checked = false; toast('Permiso denegado','warn'); return }
+    }
+    state.settings.notifications = e.target.checked
+    await db.put('settings', { key:'main', val: state.settings })
+  }
+  document.getElementById('optSound').onchange = async e => {
+    state.settings.sound = e.target.checked
+    await db.put('settings', { key:'main', val: state.settings })
+  }
+  document.getElementById('optLogs').onchange = async e => {
+    state.settings.persistLogs = e.target.checked
+    await db.put('settings', { key:'main', val: state.settings })
+  }
+  document.getElementById('optStrategy').onchange = async e => {
+    state.settings.strategy = e.target.value
+    await db.put('settings', { key:'main', val: state.settings })
+  }
+  document.getElementById('clearAll').onclick = async () => {
+    if(!confirm('¿Borrar todos los datos locales (mensajes, contactos, logs)?')) return
+    for(const s of ['messages','contacts','logs','settings']) await db.clear(s)
+    location.reload()
+  }
+  document.getElementById('logFilterAll').onclick = () => { Logger.filter='all'; Logger.render() }
+  document.getElementById('logFilterConn').onclick = () => { Logger.filter='conn'; Logger.render() }
+  document.getElementById('logFilterMsg').onclick = () => { Logger.filter='msg'; Logger.render() }
+  document.getElementById('logClear').onclick = async () => { Logger.entries=[]; await db.clear('logs').catch(()=>{}); Logger.render() }
+
+  // Nuevo chat
+  const dlg = document.getElementById('newChatDialog')
+  const form = document.getElementById('newChatForm')
+  const openNew = () => { form.reset(); form.nickname.value = state.settings.nickname || ''; dlg.showModal() }
+  document.getElementById('newChatBtn').onclick = openNew
+  document.getElementById('emptyNew').onclick = openNew
+  form.addEventListener('cancel', e => { e.preventDefault(); dlg.close() })
+  form.querySelector('button[value="cancel"]').onclick = () => dlg.close()
+  form.onsubmit = async e => {
+    e.preventDefault()
+    const data = new FormData(form)
+    dlg.close()
+    await createChat({
+      name: data.get('room'),
+      password: data.get('password'),
+      nickname: data.get('nickname')
+    })
+  }
+
+  // Composer
+  const composer = document.getElementById('composer')
+  const input = document.getElementById('input')
+  composer.onsubmit = async e => {
+    e.preventDefault()
+    const r = UI.activeRoom(); if(!r) return
+    const text = input.value.trim(); if(!text) return
+    input.value = ''; input.style.height = 'auto'
+    await r.sendMessage(text)
+    r.sendCtrl({ t:'typing', stop:true })
+  }
+  input.oninput = () => {
+    input.style.height = 'auto'
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px'
+    const r = UI.activeRoom(); if(!r) return
+    r.sendCtrl({ t:'typing' })
+  }
+  input.onkeydown = e => {
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); composer.requestSubmit() }
+  }
+
+  // File picker
+  document.getElementById('attach').onclick = () => document.getElementById('filePicker').click()
+  document.getElementById('filePicker').onchange = async e => {
+    const r = UI.activeRoom(); if(!r) return
+    for(const f of e.target.files) await r.sendFile(f)
+    e.target.value = ''
+  }
+  // Drag & drop
+  const area = document.getElementById('chatArea')
+  const overlay = document.getElementById('dropOverlay')
+  area.addEventListener('dragover', e => { e.preventDefault(); overlay.classList.add('on') })
+  area.addEventListener('dragleave', e => { if(e.target===area) overlay.classList.remove('on') })
+  area.addEventListener('drop', async e => {
+    e.preventDefault(); overlay.classList.remove('on')
+    const r = UI.activeRoom(); if(!r) return
+    for(const f of e.dataTransfer.files) await r.sendFile(f)
+  })
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if(e.key==='Escape'){
+      document.getElementById('drawer').classList.remove('on')
+      document.getElementById('backdrop').classList.remove('on')
+    }
+    if((e.ctrlKey||e.metaKey) && e.key==='k'){ e.preventDefault(); openNew() }
+  })
+
+  // Reintentar flush pendientes al recuperar foco
+  window.addEventListener('online', () => {
+    Logger.info('net', 'Conexión de red restaurada')
+    for(const r of state.rooms.values()) r.flushPending()
+  })
+
+  Logger.info('app', 'App iniciada', { selfId })
+
+  // PWA
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(
+      () => Logger.info('pwa','Service worker registrado'),
+      e => Logger.warn('pwa','Fallo SW', e.message)
+    )
+  }
+}
+
+init()
+</script>
+</body>
+</html>
