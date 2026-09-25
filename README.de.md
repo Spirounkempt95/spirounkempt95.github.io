@@ -89,22 +89,8 @@ Sobald verbunden, klicke in der Statusleiste auf den Kontakt → **SAS anzeigen*
 
 ## Wie es funktioniert
 
-```
-┌────────────────┐                          ┌────────────────┐
-│  Browser A      │                          │  Browser B      │
-│                 │                          │                 │
-│  ┌──────────┐   │                          │  ┌──────────┐   │
-│  │ P2P Chat │   │◄────────────────────────►│  │ P2P Chat │   │
-│  └──────────┘   │        WebRTC (DTLS)     │  └──────────┘   │
-│     ▲     ▲     │                          │     ▲     ▲     │
-│     │     │      │                          │     │     │      │
-│    UI   Crypto  │                          │    UI   Crypto  │
-│         Worker  │                          │         Worker  │
-└────┬────────────┘                          └───────────┬────┘
-     │                                                    │
-     └────────────► Signaling ◄───────────────────────────┘
-          (BitTorrent-Tracker / Nostr / MQTT)
-```
+<img width="1740" height="904" alt="ChatGPT Image Sep 25, 2026, 11_21_21 AM" src="https://github.com/user-attachments/assets/04121b94-6c92-49ee-9dda-80c04a62662e" />
+
 
 1. **Signaling**: Die beiden Browser finden sich über ein öffentliches, dezentrales Netzwerk — standardmäßig BitTorrent-Tracker, mit Nostr und MQTT als Fallback. Ist ein Passwort gesetzt, werden die SDP-Nachrichten (die die DTLS-Fingerabdrücke enthalten) vor dem Versand verschlüsselt, sodass ein bösartiger Signaling-Knoten keinen MITM durchführen kann.
 2. **Verbindung**: WebRTC handelt eine direkte Peer-to-Peer-Verbindung aus. Blockiert das Netzwerk einen direkten Pfad (z. B. beide Teilnehmer hinter CGNAT), wird der Verkehr über einen TURN-Server weitergeleitet — weiterhin Ende-zu-Ende-verschlüsselt, aber mit höherer Latenz.
