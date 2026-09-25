@@ -52,6 +52,7 @@ const dict = {
     confirm_hard_reset:'¿Borrar TODOS los datos locales: mensajes, contactos, ajustes, logs y salas?',
     confirm_clear_history:'¿Borrar todos los mensajes de esta sala localmente?',
     notification_title:'Nuevo mensaje', peer_left:'Un peer se ha desconectado',
+    is_typing: '{name} está escribiendo…',
   },
   en: {
     app_name:'P2P Chat', menu:'Panel', user:'User', contacts:'Contacts', logs:'Logs',
@@ -104,6 +105,7 @@ const dict = {
     confirm_hard_reset:'Delete ALL local data: messages, contacts, settings, logs and rooms?',
     confirm_clear_history:'Delete all messages of this room locally?',
     notification_title:'New message', peer_left:'A peer disconnected',
+    is_typing: '{name} is typing…',
   },
   de: {
     app_name:'P2P Chat', menu:'Panel', user:'Benutzer', contacts:'Kontakte', logs:'Logs',
@@ -156,6 +158,7 @@ const dict = {
     confirm_hard_reset:'ALLE lokalen Daten löschen: Nachrichten, Kontakte, Einstellungen, Logs und Räume?',
     confirm_clear_history:'Alle Nachrichten dieses Raums lokal löschen?',
     notification_title:'Neue Nachricht', peer_left:'Ein Peer hat sich getrennt',
+    is_typing: '{name} schreibt…',
   },
   zh: {
     app_name:'P2P 聊天', menu:'面板', user:'用户', contacts:'联系人', logs:'日志',
@@ -208,6 +211,7 @@ const dict = {
     confirm_hard_reset:'删除所有本地数据：消息、联系人、设置、日志和房间？',
     confirm_clear_history:'在本地删除此房间的所有消息？',
     notification_title:'新消息', peer_left:'一个对等已断开',
+    is_typing: '{name} 正在输入…',
   },
   ru: {
     app_name:'P2P Чат', menu:'Панель', user:'Пользователь', contacts:'Контакты', logs:'Логи',
@@ -260,10 +264,11 @@ const dict = {
     confirm_hard_reset:'Удалить ВСЕ локальные данные: сообщения, контакты, настройки, логи и комнаты?',
     confirm_clear_history:'Удалить все сообщения этой комнаты локально?',
     notification_title:'Новое сообщение', peer_left:'Пир отключился',
+    is_typing: '{name} печатает…',
   }
 };
 
-let current = 'es';
+let current = 'en';
 export function setLang(l){ if(dict[l]){ current = l; document.documentElement.lang = l; } }
 export function getLang(){ return current; }
 export function t(key, vars){

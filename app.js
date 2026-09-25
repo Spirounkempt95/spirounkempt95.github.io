@@ -228,7 +228,7 @@ class Room {
     this.createdAt = opts.createdAt || Date.now();
     this.myFingerprint = null;
     this.myPubRaw = null;
-    this.netStats = new Map(); // peerId -> { sent, recv, rtt, type, state }
+    this.netStats = new Map();
     this.connectedOnce = false;
   }
 
@@ -331,9 +331,8 @@ class Room {
     this.trysteroRoom.onPeerJoin(async peerId => {
       Logger.ok('conn', `Peer conectado: ${peerId.slice(0,8)}`);
       this.peers.set(peerId, { nickname: null, sas: null, verified: false });
-      const pub = await exportPub(this.ecdh.pub._k || this.ecdh.pub);
-      try { sendCtrl({ t:'pub', raw: this.myPubRaw }, peerId); } catch{}
-      try { sendCtrl({ t:'nick', nickname: this.nickname }, peerId); } catch{}
+      try { sendCtrl({ t:'pub', raw: this.myPubRaw }, peerId); } catch(e){ Logger.warn('conn','sendCtrl pub fallo', e.message); }
+      try { sendCtrl({ t:'nick', nickname: this.nickname }, peerId); } catch(e){ Logger.warn('conn','sendCtrl nick fallo', e.message); }
       this.flushPending();
       this.startIcePoll();
       this.startStatsPoll();
@@ -394,14 +393,17 @@ class Room {
     const peer = this.peers.get(peerId) || {};
     if (payload.t === 'pub'){
       peer.pubRaw = payload.raw;
-      peer.sas = await deriveSAS(this.ecdh.priv, payload.raw);
+      try {
+        peer.sas = await deriveSAS(this.ecdh.priv, payload.raw);
+        Logger.info('sas', `SAS con ${peerId.slice(0,6)}: ${peer.sas}`);
+      } catch(e){ Logger.warn('sas', `Error derivando SAS: ${e.message}`); }
       this.peers.set(peerId, peer);
-      Logger.info('sas', `SAS con ${peerId.slice(0,6)}: ${peer.sas}`);
       UI.updateRoomStatus(this);
     } else if (payload.t === 'nick'){
       peer.nickname = String(payload.nickname || '').slice(0,32) || peerId.slice(0,6);
       this.peers.set(peerId, peer);
-      UI.updateRoomStatus(this); UI.renderMessages();
+      UI.updateRoomStatus(this);
+      UI.renderMessages();
     } else if (payload.t === 'ack'){
       const msg = this.messages.find(m => m.id === payload.id);
       if (msg && msg.status !== 'delivered'){
@@ -412,7 +414,8 @@ class Room {
     } else if (payload.t === 'typing'){
       const el = document.getElementById('typing');
       if (el){
-        el.textContent = `${peer.nickname || peerId.slice(0,6)} ${t('type_message')}`.replace('…','') + '…';
+        const nick = payload.nickname || peer.nickname || peerId.slice(0,6);
+        el.textContent = t('is_typing', { name: nick });
         clearTimeout(this.typingTimeout);
         this.typingTimeout = setTimeout(() => { el.textContent=''; }, 3000);
       }
@@ -435,6 +438,11 @@ class Room {
     }
     const peer = this.peers.get(peerId) || {};
     const nickname = peer.nickname || env.nickname || peerId.slice(0,6);
+    // Guardar el nickname en el peer si aún no lo teníamos (fix del "typing")
+    if (!peer.nickname && env.nickname){
+      peer.nickname = env.nickname;
+      this.peers.set(peerId, peer);
+    }
 
     if (env.t === 'text'){
       const msg = { id: env.id, peerId, nickname, text: env.text, type:'text', ts: env.ts,
@@ -580,6 +588,7 @@ class Room {
   startStatsPoll(){
     if (this.statsPollTimer) return;
     this.statsPollTimer = setInterval(() => this.pollStats(), 5000);
+    setTimeout(() => this.pollStats(), 2000);
   }
   async pollStats(){
     if (!this.trysteroRoom) return;
@@ -590,22 +599,24 @@ class Room {
         if (!pc || typeof pc.getStats !== 'function') continue;
         try {
           const stats = await pc.getStats();
-          let sent=0, recv=0, rtt=null, type='', state='';
+          let sent = 0, recv = 0, rtt = null;
           stats.forEach(r => {
+            // Sumar data-channels (uso principal)
+            if (r.type === 'data-channel'){
+              sent += r.bytesSent || 0;
+              recv += r.bytesReceived || 0;
+            }
+            // Preferir transport si reporta más (agregado global)
             if (r.type === 'transport'){
               sent = Math.max(sent, r.bytesSent || 0);
               recv = Math.max(recv, r.bytesReceived || 0);
-              type = r.dtlsState || '';
-            } else if (r.type === 'candidate-pair' && (r.state === 'succeeded' || r.nominated)){
+            }
+            if (r.type === 'candidate-pair' && (r.state === 'succeeded' || r.nominated)){
               if (r.currentRoundTripTime != null) rtt = r.currentRoundTripTime * 1000;
-              state = r.state;
-            } else if (r.type === 'data-channel'){
-              sent = Math.max(sent, r.bytesSent || 0);
-              recv = Math.max(recv, r.bytesReceived || 0);
             }
           });
-          this.netStats.set(peerId, { sent, recv, rtt, type, state });
-        } catch{}
+          this.netStats.set(peerId, { sent, recv, rtt });
+        } catch(e){ /* silencioso */ }
       }
       UI.renderStats();
     } catch{}
@@ -632,14 +643,13 @@ class VirtualList {
     this.items = [];
     this.heights = new Map();
     this.DEFAULT = 68;
-    this.scrollHost = el.parentElement;
+    this.scrollHost = el;
     this.spacer = document.createElement('div');
     this.spacer.style.cssText = 'position:relative;width:100%';
     this.el.innerHTML = '';
     this.el.appendChild(this.spacer);
     this.scrollHost.addEventListener('scroll', () => this.onScroll(), { passive:true });
     this.raf = null;
-    this.pinBottom = true;
   }
   setItems(items){
     const wasAtBottom = this.isAtBottom();
@@ -753,8 +763,16 @@ const UI = {
     const time = new Date(m.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
     const lock = m.encrypted ? '<span class="lock" title="E2EE">🔒</span>' : '<span class="lock" title="DTLS">🛡️</span>';
     const status = m.self && m.status ? `<span class="status">${m.status==='delivered'?'✓✓':m.status==='sent'?'✓':'⏳'}</span>` : '';
-    const who = m.self ? t('your_name') : (m.nickname || (m.peerId||'').slice(0,6));
-    const meta = `<span class="meta">${lock}<span>${escapeHtml(who)}</span><span>·</span><span>${time}</span>${status}</span>`;
+
+    // FIX: mis mensajes muestran mi nickname, no "Tu nombre"
+    let whoHtml;
+    if (m.self){
+      whoHtml = escapeHtml(m.nickname || t('your_name'));
+    } else {
+      const nick = m.nickname || (m.peerId||'').slice(0,6);
+      whoHtml = `<span class="peer-name" data-peer="${escapeHtml(m.peerId||'')}">${escapeHtml(nick)}</span>`;
+    }
+    const meta = `<span class="meta">${lock}<span>${whoHtml}</span><span>·</span><span>${time}</span>${status}</span>`;
 
     if (m.type === 'text'){
       d.innerHTML = meta + `<span>${linkify(m.text)}</span>`;
@@ -773,14 +791,46 @@ const UI = {
       d.textContent = m.text;
     }
 
+    // FIX: acciones de borrado para TODOS los mensajes (propios y remotos)
+    // - local: siempre disponible
+    // - remoto: solo para mensajes propios (borrar en el resto de dispositivos)
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    let actionsHtml = `<button data-del-local="1" title="${t('delete_local')}">🗑</button>`;
     if (m.self){
-      const actions = document.createElement('div');
-      actions.className = 'msg-actions';
-      actions.innerHTML = `<button data-del-local="1" title="${t('delete_local')}">🗑</button>`
-        + `<button data-del-remote="1" title="${t('delete_both')}">🗑↗</button>`;
-      actions.querySelector('[data-del-local]').onclick = e => { e.stopPropagation(); r.deleteMessage(m.id, false); };
-      actions.querySelector('[data-del-remote]').onclick = e => { e.stopPropagation(); r.deleteMessage(m.id, true); };
-      d.appendChild(actions);
+      actionsHtml += `<button data-del-remote="1" title="${t('delete_both')}">🗑↗</button>`;
+    }
+    actions.innerHTML = actionsHtml;
+    const localBtn = actions.querySelector('[data-del-local]');
+    if (localBtn) localBtn.onclick = ev => { ev.stopPropagation(); r.deleteMessage(m.id, false); };
+    const remoteBtn = actions.querySelector('[data-del-remote]');
+    if (remoteBtn) remoteBtn.onclick = ev => { ev.stopPropagation(); r.deleteMessage(m.id, true); };
+    d.appendChild(actions);
+
+    // FIX: click en el nombre del peer (mensajes remotos) → abrir menú del peer o guardar contacto
+    if (!m.self){
+      const nameEl = d.querySelector('.peer-name');
+      if (nameEl){
+        nameEl.style.cursor = 'pointer';
+        nameEl.onclick = async ev => {
+          ev.stopPropagation();
+          const peerId = m.peerId;
+          if (peerId && r.peers.has(peerId)){
+            const rect = nameEl.getBoundingClientRect();
+            UI.showPeerMenu({ clientX: rect.left, clientY: rect.bottom + 4 }, peerId);
+          } else {
+            // Peer offline: guardar la sala como contacto directamente
+            const nick = m.nickname || (peerId||'').slice(0,6);
+            await db.put('contacts', { id: r.id, nickname: nick, fp: null, verified: false, at: Date.now() });
+            state.contacts = await db.all('contacts');
+            Logger.ok('contacts', `Contacto guardado: ${r.name} (${nick})`);
+            UI.renderContacts();
+            const orig = nameEl.textContent;
+            nameEl.textContent = '✓ ' + orig;
+            setTimeout(() => { nameEl.textContent = orig; }, 1200);
+          }
+        };
+      }
     }
     return d;
   },
@@ -812,15 +862,15 @@ const UI = {
     if (!el) return;
     const r = this.activeRoom();
     if (!r){ el.innerHTML = ''; return; }
+    if (!r.peers.size){ el.innerHTML = `<p class="hint">${t('without_peers')}</p>`; return; }
     const rows = [];
-    rows.push(`<div class="stat-head"><b>${t('net_stats')}</b></div>`);
     for (const [peerId, p] of r.peers){
       const s = r.netStats.get(peerId) || {};
       rows.push(`<div class="stat-row">
         <span>${escapeHtml(p.nickname||peerId.slice(0,6))}</span>
-        <span>${t('bytes_sent')}: ${fmtBytes(s.sent||0)}</span>
-        <span>${t('bytes_recv')}: ${fmtBytes(s.recv||0)}</span>
-        <span>${t('rtt')}: ${s.rtt != null ? s.rtt.toFixed(0)+' ms' : '—'}</span>
+        <span>↓ ${fmtBytes(s.recv||0)}</span>
+        <span>↑ ${fmtBytes(s.sent||0)}</span>
+        <span>${s.rtt != null ? s.rtt.toFixed(0)+' ms' : '—'}</span>
         <span>${p.connType||'?'}${p.relay?' · relay':''}</span>
       </div>`);
     }
@@ -983,7 +1033,6 @@ function applyTranslations(){
 }
 
 /* ============ PIN ============ */
-let pinBuffer = '';
 async function checkPinExists(){
   const stored = await db.get('settings', PIN_HASH_KEY);
   return stored?.val || null;
@@ -1138,7 +1187,6 @@ async function init(){
   } catch{}
   state.contacts = await db.all('contacts').catch(()=>[]) || [];
 
-  // Detectar PIN existente
   const existingPin = await checkPinExists();
   if (existingPin){
     state.settings.pinEnabled = true;
@@ -1149,12 +1197,10 @@ async function init(){
   applyFontSize();
   applyLang();
 
-  // ECDH global
   const ecdh = await genECDH();
   const pub = await exportPub(ecdh.publicKey);
   state.ecdh = { priv: ecdh.privateKey, pub };
 
-  // Poblar UI
   document.getElementById('setNickname').value = state.settings.nickname || '';
   document.getElementById('setSelfId').value = selfId;
   document.getElementById('setFingerprint').value = pub.fp;
@@ -1170,7 +1216,6 @@ async function init(){
 
   await UI.renderStorage();
 
-  // Menu
   document.getElementById('menuBtn').onclick = async () => {
     document.getElementById('drawer').classList.add('on');
     document.getElementById('backdrop').classList.add('on');
@@ -1201,7 +1246,6 @@ async function init(){
     };
   });
 
-  // Settings handlers
   document.getElementById('setNickname').onchange = async e => {
     state.settings.nickname = e.target.value.slice(0,32);
     await db.put('settings', { key:'main', val: state.settings });
@@ -1251,7 +1295,6 @@ async function init(){
     applyLang();
   };
 
-  // PIN
   const refreshPinUI = () => {
     const el = document.getElementById('pinStatus');
     el.textContent = state.settings.pinEnabled ? '✅ ' + t('pin_lock') : '—';
@@ -1280,7 +1323,6 @@ async function init(){
   };
   refreshPinUI();
 
-  // Logs filters
   document.getElementById('logFilterAll').onclick = () => { Logger.filter='all'; Logger.render(); };
   document.getElementById('logFilterConn').onclick = () => { Logger.filter='conn'; Logger.render(); };
   document.getElementById('logFilterIce').onclick = () => { Logger.filter='ice'; Logger.render(); };
@@ -1312,7 +1354,6 @@ async function init(){
     UI.renderContacts();
   };
 
-  // New chat
   const dlg = document.getElementById('newChatDialog');
   const form = document.getElementById('newChatForm');
   const openNew = () => {
@@ -1332,7 +1373,6 @@ async function init(){
     await createChat({ name: data.get('room'), password: data.get('password'), nickname: data.get('nickname') });
   };
 
-  // Composer
   const composer = document.getElementById('composer');
   const input = document.getElementById('input');
   composer.onsubmit = async e => {
@@ -1346,13 +1386,13 @@ async function init(){
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 120) + 'px';
     const r = UI.activeRoom(); if (!r) return;
-    try { r.sendCtrl({ t:'typing' }); } catch{}
+    // FIX: enviar nickname en el typing
+    try { r.sendCtrl({ t:'typing', nickname: r.nickname }); } catch{}
   };
   input.onkeydown = e => {
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); composer.requestSubmit(); }
   };
 
-  // File picker + drag-drop
   document.getElementById('attach').onclick = async () => {
     const ok = await maybeShowFileWarning();
     if (!ok) return;
@@ -1375,7 +1415,6 @@ async function init(){
     for (const f of e.dataTransfer.files) await r.sendFile(f);
   });
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape'){
       document.getElementById('drawer').classList.remove('on');
@@ -1393,13 +1432,11 @@ async function init(){
     for (const r of state.rooms.values()){ try { r.trysteroRoom?.leave?.(); } catch{} }
   });
 
-  // Lock screen
   document.getElementById('lockUnlock').onclick = tryUnlock;
   document.getElementById('lockInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') tryUnlock();
   });
 
-  // SW
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then(
       () => Logger.info('pwa', 'Service worker registrado'),
@@ -1409,7 +1446,6 @@ async function init(){
 
   Logger.info('app', 'App iniciada', { selfId });
 
-  // Si hay PIN, bloquear antes de restaurar
   if (state.settings.pinEnabled) showLock();
 
   armInactivityWatch();

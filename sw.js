@@ -1,4 +1,4 @@
-const CACHE = 'p2p-chat-v3';
+const CACHE = 'p2p-chat-v4';
 const ASSETS = [
   './', './index.html', './app.js', './i18n.js',
   './manifest.json', './icon.svg',
